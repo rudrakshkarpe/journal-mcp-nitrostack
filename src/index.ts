@@ -8,6 +8,6 @@ async function bootstrap() {
 }
 
 bootstrap().catch((error) => {
-  console.error('Failed to start journal memory MCP server:', error);
+  console.error('Failed to start flight concierge MCP server:', error);
   process.exit(1);
 });

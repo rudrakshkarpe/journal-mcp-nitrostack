@@ -1,11 +1,11 @@
 import { McpApp, Module, ConfigModule } from '@nitrostack/core';
-import { JournalModule } from './modules/journal/journal.module.js';
+import { FlightsModule } from './modules/flights/flights.module.js';
 import { SystemHealthCheck } from './health/system.health.js';
 
 @McpApp({
   module: AppModule,
   server: {
-    name: 'journal-memory-mcp',
+    name: 'flight-concierge-mcp',
     version: '1.0.0'
   },
   logging: {
@@ -17,7 +17,7 @@ import { SystemHealthCheck } from './health/system.health.js';
   description: 'Root application module',
   imports: [
     ConfigModule.forRoot(),
-    JournalModule
+    FlightsModule
   ],
   providers: [
     SystemHealthCheck,

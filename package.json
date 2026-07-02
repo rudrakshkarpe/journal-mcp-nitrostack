@@ -1,9 +1,9 @@
 {
-  "name": "journal-memory-mcp",
+  "name": "flight-concierge-mcp",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Local MCP server for indexing and searching personal journal memory dumps",
+  "description": "NitroStack MCP server for searching, comparing, and planning flights across providers",
   "scripts": {
     "dev": "nitrostack-cli dev",
     "build": "nitrostack-cli build",
@@ -25,5 +25,12 @@
   "overrides": {
     "esbuild": "^0.28.1"
   },
+  "keywords": [
+    "mcp",
+    "nitrostack",
+    "flights",
+    "travel",
+    "amadeus"
+  ],
   "author": "Rudraksh Karpe"
 }

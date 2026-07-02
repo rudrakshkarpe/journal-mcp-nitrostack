@@ -1,29 +1,44 @@
-# Journal Memory MCP
+# Flight Concierge MCP
 
-NitroStack-based MCP server for indexing and searching personal journal memory
-dumps across local exports from tools like Obsidian, Notion, Apple Notes, and
-Google Keep.
+NitroStack MCP server for searching, comparing, and planning flights.
 
-The first version is intentionally local-first: point it at exported folders or
-vaults, keep the index on disk, and use MCP tools to search or recall memories.
-Direct API sync can be added later once each provider's auth story is clear.
+This replaces the original journal-memory experiment with a more MCP-native
+travel workflow: live tools, provider adapters, normalized offers, search links,
+and agent-friendly tradeoff analysis.
 
-## Tools
+## What It Does
 
-- `register_journal_source` registers a local folder or vault.
-- `index_journals` scans registered sources into `data/journal-index.json`.
-- `search_journals` searches indexed entries by query, source, tags, or dates.
-- `get_journal_entry` returns full content for a search result.
-- `capture_memory_dump` saves one-off journal text directly into the index.
-- `list_journal_sources` shows configured sources and index stats.
+- Searches flights using Amadeus when credentials are configured.
+- Falls back to deterministic mock offers when credentials are missing.
+- Compares offers by price, total duration, and stops.
+- Creates search links for Google Flights, Skyscanner, and Kayak.
+- Exposes provider status so an MCP client can tell whether results are live.
 
-## Supported Local Inputs
+## MCP Tools
 
-- Obsidian vaults: `.md` and `.markdown`
-- Notion exports: `.md`, `.html`, `.txt`, and `.json`
-- Apple Notes exports: `.txt`, `.html`, `.md`
-- Google Keep Takeout: `.json` and `.html`
-- Generic memory dumps: direct tool input through `capture_memory_dump`
+- `search_flights`
+- `compare_flight_offers`
+- `create_flight_search_links`
+- `list_flight_providers`
+
+## Environment
+
+Create `.env` from `.env.example`:
+
+```bash
+cp .env.example .env
+```
+
+For live Amadeus search:
+
+```bash
+AMADEUS_BASE_URL=https://test.api.amadeus.com
+AMADEUS_CLIENT_ID=your_client_id
+AMADEUS_CLIENT_SECRET=your_client_secret
+```
+
+Without credentials, `search_flights` still works with mock data so demos and
+MCP client integration can be tested immediately.
 
 ## Quick Start
 
@@ -32,41 +47,42 @@ npm install
 npm run dev
 ```
 
-Then connect the running MCP server from NitroStudio or another MCP-compatible
-client.
-
-## Example MCP Calls
-
-Register an Obsidian vault:
+## Example MCP Call
 
 ```json
 {
-  "id": "obsidian-personal",
-  "label": "Personal Obsidian Vault",
-  "type": "obsidian",
-  "path": "/Users/rudrakshkarpe/path/to/vault",
-  "defaultTags": ["journal", "obsidian"]
-}
-```
-
-Index everything:
-
-```json
-{
-  "rebuild": true
-}
-```
-
-Search:
-
-```json
-{
-  "query": "career anxiety",
+  "origin": "BLR",
+  "destination": "SFO",
+  "departureDate": "2026-08-14",
+  "returnDate": "2026-08-28",
+  "adults": 1,
+  "cabinClass": "ECONOMY",
+  "currencyCode": "USD",
+  "maxStops": 1,
   "limit": 5
 }
 ```
 
-## Common Commands
+Example user prompt:
+
+```text
+Use the flight concierge MCP to find BLR to SFO flights for 2026-08-14,
+returning 2026-08-28, economy, one adult, max one stop. Compare the options by
+price, duration, and stops, then recommend the best tradeoff.
+```
+
+## Provider Roadmap
+
+- Amadeus: live flight search and pricing.
+- Duffel: future booking, order management, seats, and bags.
+- Skyscanner: future partner/deep-link search provider if API access is
+  approved.
+
+The server intentionally does not ticket or take payment yet. Real booking needs
+passenger PII, payment handling, refunds, provider compliance, and strong user
+confirmation flows.
+
+## Commands
 
 ```bash
 npm run dev
@@ -76,22 +92,5 @@ npm start
 
 ## NitroStudio
 
-NitroStudio is the recommended way to test and debug NitroStack MCP servers
-during development.
-
-- Download: <https://nitrostack.ai/studio>
-- Studio: <https://nitrostack.ai/studio>
-
-## Links
-
-- Docs: <https://docs.nitrostack.ai>
-- Templates docs: <https://docs.nitrostack.ai/templates/01-starter-template>
-- Main repository: <https://github.com/nitrocloudofficial/nitrostack>
-
-## Community
-
-- Discord: <https://discord.gg/uVWey6UhuD>
-- X: <https://x.com/nitrostackai>
-- YouTube: <https://www.youtube.com/@nitrostackai>
-- LinkedIn: <https://linkedin.com/company/nitrostack-ai/>
-- GitHub: <https://github.com/nitrostackai>
+Open this folder in NitroStudio to test tools visually, inspect payloads, and
+chat with the MCP server.
