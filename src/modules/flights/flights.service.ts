@@ -30,14 +30,30 @@ export class FlightsService {
         if (normalized.provider === 'amadeus') {
           throw error;
         }
-        warnings.push(`Amadeus live search failed, using mock results: ${error.message}`);
+        warnings.push(`Amadeus live search failed: ${error.message}`);
       }
     } else if (normalized.provider === 'amadeus') {
       throw new Error('Amadeus provider requested, but AMADEUS_CLIENT_ID and AMADEUS_CLIENT_SECRET are not configured.');
-    } else if (!this.hasAmadeusCredentials()) {
-      warnings.push('Amadeus credentials are not configured; returned mock flight offers.');
     }
 
+    if (provider === 'aviationstack' || (normalized.provider === 'auto' && this.hasAviationstackCredentials())) {
+      if (!this.hasAviationstackCredentials()) {
+        throw new Error('Aviationstack provider requested, but AVIATIONSTACK_API_KEY is not configured.');
+      }
+      try {
+        const result = await this.searchAviationstack(normalized);
+        return this.toSearchResult('aviationstack', true, normalized, result.offers, [...warnings, ...result.warnings]);
+      } catch (error: any) {
+        if (normalized.provider === 'aviationstack') {
+          throw error;
+        }
+        warnings.push(`Aviationstack live schedule search failed: ${error.message}`);
+      }
+    }
+
+    if (!this.hasAmadeusCredentials() && !this.hasAviationstackCredentials()) {
+      warnings.push('No live provider credentials are configured; returned deterministic mock flight offers.');
+    }
     const mockOffers = this.searchMock(normalized);
     return this.toSearchResult('mock', false, normalized, mockOffers, warnings);
   }
@@ -61,13 +77,16 @@ export class FlightsService {
     const priceWeight = priorities.priceWeight ?? 0.45;
     const durationWeight = priorities.durationWeight ?? 0.35;
     const stopsWeight = priorities.stopsWeight ?? 0.2;
-    const minPrice = Math.min(...offers.map((offer) => offer.price.total));
+    const pricedOffers = offers.filter((offer) => offer.price.available !== false && offer.price.total > 0);
+    const minPrice = pricedOffers.length ? Math.min(...pricedOffers.map((offer) => offer.price.total)) : 0;
     const minDuration = Math.min(...offers.map((offer) => this.totalDuration(offer)));
     const minStops = Math.min(...offers.map((offer) => this.totalStops(offer)));
 
     const rankedOffers = offers
       .map((offer) => {
-        const pricePenalty = minPrice > 0 ? offer.price.total / minPrice : 1;
+        const pricePenalty = minPrice > 0 && offer.price.available !== false && offer.price.total > 0
+          ? offer.price.total / minPrice
+          : 1;
         const durationPenalty = minDuration > 0 ? this.totalDuration(offer) / minDuration : 1;
         const stopsPenalty = this.totalStops(offer) - minStops;
         const score = 100 / ((pricePenalty * priceWeight) + (durationPenalty * durationWeight) + ((1 + stopsPenalty) * stopsWeight));
@@ -84,7 +103,7 @@ export class FlightsService {
       rankedOffers,
       recommendation,
       rationale: recommendation
-        ? `Best balance is ${recommendation.id}: ${recommendation.price.currency} ${recommendation.price.total}, ${this.formatMinutes(this.totalDuration(recommendation))}, ${this.totalStops(recommendation)} total stops.`
+        ? `Best balance is ${recommendation.id}: ${this.formatPrice(recommendation)}, ${this.formatMinutes(this.totalDuration(recommendation))}, ${this.totalStops(recommendation)} total stops.`
         : 'No recommendation available.'
     };
   }
@@ -101,6 +120,13 @@ export class FlightsService {
         live: this.hasAmadeusCredentials(),
         purpose: 'Live flight search and pricing via Amadeus Flight Offers Search.',
         requiredEnv: ['AMADEUS_CLIENT_ID', 'AMADEUS_CLIENT_SECRET']
+      },
+      {
+        name: 'aviationstack',
+        enabled: this.hasAviationstackCredentials(),
+        live: this.hasAviationstackCredentials(),
+        purpose: 'Live flight status and schedule lookup via Aviationstack. Does not provide ticket fares.',
+        requiredEnv: ['AVIATIONSTACK_API_KEY']
       },
       {
         name: 'mock',
@@ -145,11 +171,24 @@ export class FlightsService {
     if (provider === 'amadeus') {
       return this.hasAmadeusCredentials() ? 'amadeus' : 'mock';
     }
-    return this.hasAmadeusCredentials() ? 'amadeus' : 'mock';
+    if (provider === 'aviationstack') {
+      return this.hasAviationstackCredentials() ? 'aviationstack' : 'mock';
+    }
+    if (this.hasAmadeusCredentials()) {
+      return 'amadeus';
+    }
+    if (this.hasAviationstackCredentials()) {
+      return 'aviationstack';
+    }
+    return 'mock';
   }
 
   private hasAmadeusCredentials(): boolean {
     return Boolean(process.env.AMADEUS_CLIENT_ID && process.env.AMADEUS_CLIENT_SECRET);
+  }
+
+  private hasAviationstackCredentials(): boolean {
+    return Boolean(process.env.AVIATIONSTACK_API_KEY);
   }
 
   private async searchAmadeus(input: FlightSearchInput): Promise<FlightOffer[]> {
@@ -270,6 +309,135 @@ export class FlightsService {
     };
   }
 
+  private async searchAviationstack(input: FlightSearchInput): Promise<{ offers: FlightOffer[]; warnings: string[] }> {
+    const outbound = await this.fetchAviationstackFlights(input.origin, input.destination, input.departureDate, input.limit ?? 10);
+    const returnFlights = input.returnDate
+      ? await this.fetchAviationstackFlights(input.destination, input.origin, input.returnDate, input.limit ?? 10)
+      : [];
+    const warnings = [
+      'Aviationstack returns flight schedules/status, not fare prices or ticket availability.'
+    ];
+
+    if (input.returnDate && outbound.length > 0 && returnFlights.length === 0) {
+      warnings.push('No Aviationstack return-leg records matched the requested route/date; returned outbound schedule matches only.');
+    }
+
+    const count = Math.min(outbound.length, input.limit ?? 10);
+    const offers: FlightOffer[] = [];
+
+    for (let index = 0; index < count; index += 1) {
+      const outboundItinerary = this.normalizeAviationstackItinerary(outbound[index]);
+      const returnItinerary = input.returnDate && returnFlights[index]
+        ? this.normalizeAviationstackItinerary(returnFlights[index])
+        : undefined;
+      const firstFlight = outbound[index]?.flight?.iata ?? outbound[index]?.flight?.icao ?? `route-${index + 1}`;
+      const offer: FlightOffer = {
+        id: `aviationstack-${firstFlight}-${index + 1}`.toLowerCase(),
+        provider: 'aviationstack',
+        providerOfferId: String(firstFlight),
+        price: {
+          total: 0,
+          currency: input.currencyCode ?? 'USD',
+          available: false
+        },
+        itineraries: returnItinerary ? [outboundItinerary, returnItinerary] : [outboundItinerary],
+        validatingAirlineCodes: [outbound[index]?.airline?.iata ?? outbound[index]?.airline?.icao].filter(Boolean),
+        cabinClass: input.cabinClass,
+        deepLinks: this.createDeepLinks(input),
+        score: 0,
+        tradeoffs: [],
+        raw: {
+          outbound: outbound[index],
+          return: returnFlights[index]
+        }
+      };
+      offers.push({
+        ...offer,
+        score: this.baseScore(offer),
+        tradeoffs: this.basicTradeoffs(offer)
+      });
+    }
+
+    return {
+      offers: offers
+        .filter((offer) => input.maxStops === undefined || this.maxStopsPerItinerary(offer) <= input.maxStops)
+        .sort((a, b) => this.totalDuration(a) - this.totalDuration(b)),
+      warnings
+    };
+  }
+
+  private async fetchAviationstackFlights(origin: string, destination: string, flightDate: string, limit: number): Promise<any[]> {
+    const baseUrl = process.env.AVIATIONSTACK_BASE_URL ?? 'http://api.aviationstack.com/v1';
+    const safeLimit = String(Math.min(Math.max(limit, 1), 100));
+    const attempts: Array<Record<string, string>> = [
+      { dep_iata: origin, arr_iata: destination, flight_date: flightDate, limit: safeLimit },
+      { dep_iata: origin, flight_date: flightDate, limit: safeLimit },
+      { dep_iata: origin, limit: safeLimit }
+    ];
+    let lastError: string | undefined;
+
+    for (const attempt of attempts) {
+      const params = new URLSearchParams({
+        access_key: process.env.AVIATIONSTACK_API_KEY ?? '',
+        ...attempt
+      });
+      const response = await fetch(`${baseUrl.replace(/\/$/, '')}/flights?${params.toString()}`);
+      const body = await response.text();
+
+      if (!response.ok) {
+        lastError = `Aviationstack request failed (${response.status}): ${body.slice(0, 500)}`;
+        if (response.status === 403 || response.status === 401) {
+          continue;
+        }
+        throw new Error(lastError);
+      }
+
+      const payload = JSON.parse(body) as any;
+      if (payload.error) {
+        lastError = `Aviationstack error: ${JSON.stringify(payload.error).slice(0, 500)}`;
+        if (payload.error.code === 'function_access_restricted' || payload.error.code === 'https_access_restricted') {
+          continue;
+        }
+        throw new Error(lastError);
+      }
+
+      const records = Array.isArray(payload.data) ? payload.data : [];
+      const filtered = records.filter((record: any) => {
+        const matchesDestination = !destination || record.arrival?.iata === destination;
+        const matchesDate = !flightDate || record.flight_date === flightDate;
+        return matchesDestination && matchesDate;
+      });
+      return filtered.length > 0 ? filtered : records.filter((record: any) => record.arrival?.iata === destination);
+    }
+
+    throw new Error(lastError ?? 'Aviationstack request failed.');
+  }
+
+  private normalizeAviationstackItinerary(record: any): FlightItinerary {
+    const departureAt = record.departure?.scheduled ?? record.departure?.estimated ?? record.departure?.actual ?? '';
+    const arrivalAt = record.arrival?.scheduled ?? record.arrival?.estimated ?? record.arrival?.actual ?? '';
+    const durationMinutes = this.minutesBetween(departureAt, arrivalAt);
+    const carrierCode = record.airline?.iata ?? record.airline?.icao ?? '';
+    const flightNumber = record.flight?.number ?? record.flight?.iata ?? record.flight?.icao;
+    const segment: FlightSegment = {
+      departureAirport: record.departure?.iata,
+      arrivalAirport: record.arrival?.iata,
+      departureAt,
+      arrivalAt,
+      carrierCode,
+      carrierName: record.airline?.name,
+      flightNumber,
+      aircraft: record.aircraft?.iata ?? record.aircraft?.icao,
+      durationMinutes
+    };
+
+    return {
+      durationMinutes,
+      stops: 0,
+      segments: [segment]
+    };
+  }
+
   private searchMock(input: FlightSearchInput): FlightOffer[] {
     const currency = input.currencyCode ?? 'USD';
     const seed = this.seed(input.origin + input.destination + input.departureDate + (input.returnDate ?? ''));
@@ -376,13 +544,16 @@ export class FlightsService {
     warnings: string[]
   ): FlightSearchResult {
     const compared = this.compare(offers).rankedOffers;
+    const pricedOffers = offers.filter((offer) => offer.price.available !== false && offer.price.total > 0);
     return {
       provider,
       live,
       searchedAt: new Date().toISOString(),
       query,
       summary: offers.length
-        ? `Found ${offers.length} ${live ? 'live' : 'mock'} offers from ${query.origin} to ${query.destination}. Cheapest: ${offers[0].price.currency} ${offers[0].price.total}.`
+        ? pricedOffers.length > 0
+          ? `Found ${offers.length} ${live ? 'live' : 'mock'} flight options from ${query.origin} to ${query.destination}. Cheapest: ${this.formatPrice(pricedOffers[0])}.`
+          : `Found ${offers.length} ${live ? 'live' : 'mock'} flight schedule options from ${query.origin} to ${query.destination}. Fares are not available from this provider.`
         : `No offers found from ${query.origin} to ${query.destination}.`,
       offers: compared,
       warnings
@@ -391,7 +562,7 @@ export class FlightsService {
 
   private basicTradeoffs(offer: FlightOffer): string[] {
     const tradeoffs = [
-      `${offer.price.currency} ${offer.price.total}`,
+      this.formatPrice(offer),
       `${this.formatMinutes(this.totalDuration(offer))} total travel time`,
       `${this.totalStops(offer)} total stops`
     ];
@@ -403,7 +574,7 @@ export class FlightsService {
 
   private describeTradeoffs(offer: FlightOffer, minPrice: number, minDuration: number, minStops: number): string[] {
     const tradeoffs = this.basicTradeoffs(offer);
-    if (offer.price.total === minPrice) {
+    if (offer.price.available !== false && minPrice > 0 && offer.price.total === minPrice) {
       tradeoffs.push('cheapest option');
     }
     if (this.totalDuration(offer) === minDuration) {
@@ -418,7 +589,7 @@ export class FlightsService {
   private baseScore(offer: FlightOffer): number {
     const durationHours = Math.max(this.totalDuration(offer) / 60, 1);
     const stops = this.totalStops(offer);
-    const priceComponent = Math.max(0, 1000 - offer.price.total) / 10;
+    const priceComponent = offer.price.available === false ? 0 : Math.max(0, 1000 - offer.price.total) / 10;
     const durationComponent = Math.max(0, 24 - durationHours) * 2;
     const stopsComponent = Math.max(0, 3 - stops) * 8;
     return Math.round((priceComponent + durationComponent + stopsComponent) * 10) / 10;
@@ -451,6 +622,24 @@ export class FlightsService {
     const date = new Date(`${isoLocal}Z`);
     date.setUTCMinutes(date.getUTCMinutes() + minutes);
     return date.toISOString().replace('.000Z', '');
+  }
+
+  private minutesBetween(start?: string, end?: string): number {
+    if (!start || !end) {
+      return 0;
+    }
+    const startMs = Date.parse(start);
+    const endMs = Date.parse(end);
+    if (Number.isNaN(startMs) || Number.isNaN(endMs) || endMs < startMs) {
+      return 0;
+    }
+    return Math.round((endMs - startMs) / 60_000);
+  }
+
+  private formatPrice(offer: FlightOffer): string {
+    return offer.price.available === false
+      ? 'fare unavailable'
+      : `${offer.price.currency} ${offer.price.total}`;
   }
 
   private formatMinutes(minutes: number): string {

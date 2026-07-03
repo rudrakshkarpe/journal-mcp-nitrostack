@@ -8,8 +8,9 @@ and agent-friendly tradeoff analysis.
 
 ## What It Does
 
-- Searches flights using Amadeus when credentials are configured.
-- Falls back to deterministic mock offers when credentials are missing.
+- Searches flight fares using Amadeus when credentials are configured.
+- Searches live flight schedules/status using Aviationstack when configured.
+- Falls back to deterministic mock offers only when no live provider is configured.
 - Compares offers by price, total duration, and stops.
 - Creates search links for Google Flights, Skyscanner, and Kayak.
 - Exposes provider status so an MCP client can tell whether results are live.
@@ -29,7 +30,7 @@ Create `.env` from `.env.example`:
 cp .env.example .env
 ```
 
-For live Amadeus search:
+For live Amadeus fare search:
 
 ```bash
 AMADEUS_BASE_URL=https://test.api.amadeus.com
@@ -37,8 +38,18 @@ AMADEUS_CLIENT_ID=your_client_id
 AMADEUS_CLIENT_SECRET=your_client_secret
 ```
 
-Without credentials, `search_flights` still works with mock data so demos and
-MCP client integration can be tested immediately.
+For live Aviationstack schedule/status search:
+
+```bash
+AVIATIONSTACK_BASE_URL=http://api.aviationstack.com/v1
+AVIATIONSTACK_API_KEY=your_aviationstack_key
+```
+
+Aviationstack does not return ticket fares. When it is the selected provider,
+flight times, airlines, status, terminals, and gates can be live, but prices are
+reported as unavailable. Without any live credentials, `search_flights` still
+works with mock data so demos and MCP client integration can be tested
+immediately.
 
 ## Quick Start
 
@@ -74,6 +85,7 @@ price, duration, and stops, then recommend the best tradeoff.
 ## Provider Roadmap
 
 - Amadeus: live flight search and pricing.
+- Aviationstack: live flight status and schedule data.
 - Duffel: future booking, order management, seats, and bags.
 - Skyscanner: future partner/deep-link search provider if API access is
   approved.

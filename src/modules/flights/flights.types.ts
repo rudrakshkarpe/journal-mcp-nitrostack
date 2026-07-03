@@ -1,4 +1,4 @@
-export const FLIGHT_PROVIDERS = ['auto', 'amadeus', 'mock'] as const;
+export const FLIGHT_PROVIDERS = ['auto', 'amadeus', 'aviationstack', 'mock'] as const;
 export type FlightProvider = typeof FLIGHT_PROVIDERS[number];
 
 export const CABIN_CLASSES = ['ECONOMY', 'PREMIUM_ECONOMY', 'BUSINESS', 'FIRST'] as const;
@@ -46,6 +46,7 @@ export interface FlightOffer {
   price: {
     total: number;
     currency: string;
+    available?: boolean;
   };
   itineraries: FlightItinerary[];
   validatingAirlineCodes: string[];

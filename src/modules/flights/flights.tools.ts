@@ -15,7 +15,7 @@ const searchSchema = z.object({
   maxPrice: z.number().positive().optional().describe('Maximum total price'),
   maxStops: z.number().int().min(0).optional().describe('Maximum stops per itinerary'),
   nonStop: z.boolean().optional().describe('Only direct flights when true'),
-  provider: z.enum(FLIGHT_PROVIDERS).default('auto').optional().describe('Provider to use. auto uses Amadeus when credentials exist, otherwise mock.'),
+  provider: z.enum(FLIGHT_PROVIDERS).default('auto').optional().describe('Provider to use. auto uses Amadeus when credentials exist, then Aviationstack, otherwise mock.'),
   limit: z.number().int().min(1).max(50).default(10).optional().describe('Maximum offers to return')
 });
 
@@ -24,7 +24,7 @@ export class FlightsTools {
 
   @Tool({
     name: 'search_flights',
-    description: 'Search and rank flight offers. Uses Amadeus live search when credentials are configured, with mock fallback for demos.',
+    description: 'Search and rank flight options. Uses Amadeus for live fares, Aviationstack for live schedules/status, with mock fallback for demos.',
     inputSchema: searchSchema
   })
   async searchFlights(input: any, ctx: ExecutionContext) {
