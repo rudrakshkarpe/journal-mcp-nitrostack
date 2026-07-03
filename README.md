@@ -2,7 +2,7 @@
 
 Flight Concierge MCP is a NitroStack-based Model Context Protocol server for searching, comparing, and planning flights across multiple providers.
 
-The project started as a journal-memory MCP experiment and was intentionally pivoted into a flight concierge because flights are a stronger MCP use case: the assistant can call live tools, inspect provider availability, normalize structured results, compare tradeoffs, and hand the user useful next actions instead of just storing notes.
+It gives an assistant a provider-aware travel workflow: call live tools, inspect provider availability, normalize structured results, compare tradeoffs, and hand the user useful next actions.
 
 ## Current Status
 
@@ -16,7 +16,8 @@ The project started as a journal-memory MCP experiment and was intentionally piv
   - Aviationstack for live flight schedule and status data when an Aviationstack API key is configured.
   - Mock fallback for deterministic demos when no live provider credentials are available.
 
-## Screenshots From The Build
+<details>
+<summary><strong>Screenshots from the build</strong></summary>
 
 ### Nitro Studio App Canvas
 
@@ -29,6 +30,8 @@ This is the Nitro Studio view of the MCP app after the flight module was built. 
 This screenshot captures the NitroStack Cloud deployment pipeline processing the MCP app, building the TypeScript production bundle, and preparing the cloud deployment.
 
 ![NitroStack Cloud Deployment Logs](docs/assets/nitrocloud-deployment-logs.png)
+
+</details>
 
 ## What This Server Does
 
@@ -43,29 +46,8 @@ The server exposes flight planning capabilities to any MCP-compatible client. In
 - Generate user-facing search links for Google Flights, Skyscanner, and Kayak.
 - Provide an agent prompt that turns a natural-language trip request into a structured search and comparison workflow.
 
-## Why We Pivoted From Journal Memory
-
-The first idea was a journal-memory MCP server that would track journal entries across Notion, Obsidian, Apple Notes, Google Keep, and other note takers.
-
-That can become useful, but the first version was too broad:
-
-- Each note source needs a different integration model.
-- Apple Notes and Google Keep do not expose simple universal APIs for this use case.
-- Syncing private memory dumps raises privacy, authentication, deduplication, and data ownership questions early.
-- The MCP tools would mostly be search and summarization wrappers until the data pipeline is mature.
-
-The flight concierge version is more immediately demonstrable as MCP:
-
-- A user asks a travel question.
-- The assistant calls a tool.
-- The server talks to external providers.
-- The server normalizes and ranks results.
-- The assistant explains tradeoffs.
-- The user gets links and next steps.
-
-That makes the value of MCP visible in one interaction.
-
-## Project Structure
+<details>
+<summary><strong>Project structure</strong></summary>
 
 ```text
 .
@@ -93,7 +75,10 @@ That makes the value of MCP visible in one interaction.
 └── tsconfig.json
 ```
 
-## How We Built It From Scratch
+</details>
+
+<details>
+<summary><strong>How we built it from scratch</strong></summary>
 
 ### 1. Created A NitroStack MCP Project
 
@@ -279,7 +264,10 @@ After the server was built, we opened it in Nitro Studio and verified that Nitro
 
 Then we deployed it through NitroStack Cloud. The deployment pipeline built the TypeScript production bundle and published the MCP service URL.
 
-## MCP Resources
+</details>
+
+<details>
+<summary><strong>MCP resource reference</strong></summary>
 
 ### `flight-concierge://providers`
 
@@ -314,7 +302,10 @@ Example shape:
 }
 ```
 
-## MCP Prompt
+</details>
+
+<details>
+<summary><strong>MCP prompt reference</strong></summary>
 
 ### `flight_concierge_search`
 
@@ -333,7 +324,10 @@ Example prompt argument:
 }
 ```
 
-## Local Setup
+</details>
+
+<details>
+<summary><strong>Local setup</strong></summary>
 
 ### 1. Install Dependencies
 
@@ -384,7 +378,10 @@ npm run build
 npm run start:prod
 ```
 
-## Connect The Deployed Server To Codex
+</details>
+
+<details>
+<summary><strong>Connect the deployed server to Codex</strong></summary>
 
 The deployed NitroStack MCP endpoint used in this build is:
 
@@ -411,7 +408,10 @@ codex mcp remove flight-mate-mcp
 codex mcp add flight-mate-mcp --url https://your-new-nitrostack-url.app.nitrocloud.ai/mcp
 ```
 
-## Example Codex Prompts
+</details>
+
+<details>
+<summary><strong>Example Codex prompts</strong></summary>
 
 List providers:
 
@@ -443,7 +443,10 @@ Create links:
 Use flight-mate-mcp to create flight search links for BLR to SFO departing 2026-08-14 and returning 2026-08-28.
 ```
 
-## Example Tool Payloads
+</details>
+
+<details>
+<summary><strong>Example tool payloads</strong></summary>
 
 ### `search_flights`
 
@@ -488,7 +491,10 @@ Use flight-mate-mcp to create flight search links for BLR to SFO departing 2026-
 }
 ```
 
-## Deploy To NitroStack Cloud
+</details>
+
+<details>
+<summary><strong>Deploy to NitroStack Cloud</strong></summary>
 
 There are two practical deployment paths.
 
@@ -518,7 +524,10 @@ zip -r ../flight-concierge-mcp.zip . \
 
 Upload the zip in NitroStack Cloud, set the same environment variables, and deploy.
 
-## Environment Variables
+</details>
+
+<details>
+<summary><strong>Environment variables</strong></summary>
 
 | Variable | Required | Used By | Description |
 | --- | --- | --- | --- |
@@ -528,7 +537,10 @@ Upload the zip in NitroStack Cloud, set the same environment variables, and depl
 | `AVIATIONSTACK_BASE_URL` | No | Aviationstack | Defaults to `http://api.aviationstack.com/v1`. |
 | `AVIATIONSTACK_API_KEY` | For Aviationstack | Aviationstack | Aviationstack API key. |
 
-## Security Notes
+</details>
+
+<details>
+<summary><strong>Security notes</strong></summary>
 
 - API keys must stay in `.env` locally or NitroStack Cloud environment variables.
 - `.env` is intentionally not committed.
@@ -536,7 +548,10 @@ Upload the zip in NitroStack Cloud, set the same environment variables, and depl
 - Aviationstack and Amadeus responses may include operational flight data; avoid logging sensitive user data around trip planning in production.
 - This server does not process payments or book tickets.
 
-## Verification
+</details>
+
+<details>
+<summary><strong>Verification</strong></summary>
 
 The codebase has been verified with:
 
@@ -551,7 +566,10 @@ The deployed MCP server was also tested from Codex:
 - `search_flights` returned live Aviationstack schedule data for a BLR to GOI test search.
 - The result correctly warned that Aviationstack does not return fares.
 
-## Limitations
+</details>
+
+<details>
+<summary><strong>Limitations</strong></summary>
 
 - Aviationstack does not return ticket prices.
 - Amadeus credentials are needed for real fare shopping.
@@ -559,17 +577,23 @@ The deployed MCP server was also tested from Codex:
 - The server does not book, ticket, cancel, refund, collect payment, or store traveler PII.
 - Provider availability depends on your API plan, rate limits, and allowed endpoint filters.
 
-## Future Improvements
+</details>
+
+<details>
+<summary><strong>Future improvements</strong></summary>
 
 - Add Duffel or another booking-capable provider for real order creation.
 - Add airport and city-code lookup tools.
 - Add fare calendar search for flexible travel dates.
-- Add user preference memory, such as preferred airlines, airports, max layover, and baggage expectations.
+- Add saved travel preferences, such as preferred airlines, airports, max layover, and baggage expectations.
 - Add cached provider responses for repeated searches.
 - Add stricter result provenance and provider-specific confidence notes.
 - Add integration tests around provider fallback behavior.
 
-## Useful Commands
+</details>
+
+<details>
+<summary><strong>Useful commands</strong></summary>
 
 ```bash
 npm run dev
@@ -579,7 +603,10 @@ npm run start:prod
 npm run upgrade
 ```
 
-## Repository Hygiene
+</details>
+
+<details>
+<summary><strong>Repository hygiene</strong></summary>
 
 Before pushing:
 
@@ -599,3 +626,5 @@ The repository should contain documentation, source, lockfile, and screenshots. 
 - `dist`
 - local zip files
 - provider secrets
+
+</details>
